@@ -4,34 +4,17 @@ Agentic Memory with Concept Design, Synchronizations, and Structural Enforcement
 
 GAM+Sync is a CLI tool (`gam`) for managing agentic software development. It provides concepts (independent units of functionality), synchronizations (declarative inter-concept rules), region markers (structural namespace enforcement), and a validation pipeline — so autonomous coding agents can work reliably on large codebases.
 
-## Architecture
 
-```
-┌──────────────┐    ┌──────────────┐
-│  Memorizer   │◄──►│  Researcher  │
-│  (auditor)   │    │  (coder)     │
-└──────┬───────┘    └──────┬───────┘
-       │                   │
-       ▼                   ▼
-┌──────────────────────────────────┐
-│         Redis Streams            │
-│  agent_tasks  │  agent_proposals │
-└──────────────────────────────────┘
-       │
-       ▼
-┌──────────────────────────────────┐
-│          PostgreSQL              │
-│  concepts, regions, syncs,       │
-│  turns, proposals, flow_log,     │
-│  execution_plans, quality_grades │
-└──────────────────────────────────┘
-       │
-       ▼
-┌──────────────────────────────────┐
-│        Filesystem                │
-│  arch.md  │  docs/  │  source    │
-└──────────────────────────────────┘
-```
+
+GAM+Sync synthesizes four approaches that each solve a different face of this problem.
+
+GAM+Sync uses a skeletal architecture file (arch.md) that agents use for orientation, region markers in source code that tag files with namespace paths, a two-command turn ritual (start/end) with a scratchpad turn memory field for cross-session continuity, and the principle that enforcement lives in tool commands rather than agent-remembered rules.
+
+Concept Design and Synchronizations (Meng & Jackson, Onward! 2025) contributed the design methodology where concepts are independent services with purpose, state, typed actions, and operational principles. The synchronization language (when/where/then) declaratively connects concepts without creating dependencies. What survived: concept specifications, the synchronization engine with flow tokens for causal tracking, spec-first generation, and provenance-based debugging via sync attribution. Dropped elements—RDF/SPARQL storage, the Web bootstrap concept, and Turtle-format action records—were replaced by PostgreSQL JSONB, a CLI entry point, and a flow_log table.
+
+GAM+Sync adopts enforcement infrastructure: a dual-agent architecture (Memorizer auditor, Researcher coder), proposals as structured change requests with typed transitions, and tiered validation (four tiers) with advisory locking on LTREE paths. What survived includes correction briefings with typed error codes, Redis streams for inter-role queuing, and LTREE storage with ancestor-based invariant inheritance.
+
+Harness Engineering (OpenAI, 2026) contributed operational learnings from shipping a million-line product with zero manually-written code. GAM+Sync adopted: the docs/ directory as repo-local knowledge, execution plans as multi-turn artifacts with decision logs, iterative Tier 3 review loops, runtime validation (Tier 4), gardening agents for entropy management with quality grades, agent-actionable rejection messages, and a preference for boring, well-documented tools well-represented in training data.
 
 ## Quick Start
 
