@@ -25,11 +25,9 @@ var initCmd = &cobra.Command{
 		archPath := filepath.Join(root, "arch.md")
 		if _, err := os.Stat(archPath); os.IsNotExist(err) {
 			archContent := `# Architecture
-# Namespace dotwalk — each line is a region path with optional comment.
-# Validation (gam validate --arch) checks that source @region markers match.
-# Indentation is cosmetic. Hierarchy is inferred from the dot path.
 
-app                          # Root application namespace
+# @region:app
+# @endregion:app
 `
 			if err := os.WriteFile(archPath, []byte(archContent), 0644); err != nil {
 				return fmt.Errorf("create arch.md: %w", err)

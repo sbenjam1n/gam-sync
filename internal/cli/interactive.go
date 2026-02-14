@@ -105,7 +105,7 @@ type treeItem struct {
 	depth     int
 	expanded  bool
 	children  []*treeItem
-	comment   string // from arch.md
+	description string // from arch.md
 }
 
 // --- Model ---
@@ -137,12 +137,12 @@ func newInteractiveModel(
 	dbConcepts []dbConceptInfo,
 	dbSyncs []dbSyncInfo,
 ) interactiveModel {
-	archComments := make(map[string]string)
+	archDescs := make(map[string]string)
 	for _, e := range archEntries {
-		archComments[e.Path] = e.Comment
+		archDescs[e.Path] = e.Description
 	}
 
-	items := buildTreeItems(tree, archComments, 0)
+	items := buildTreeItems(tree, archDescs, 0)
 	// Expand top-level by default
 	for _, item := range items {
 		item.expanded = true
@@ -162,18 +162,18 @@ func newInteractiveModel(
 	}
 }
 
-func buildTreeItems(node *region.TreeNode, comments map[string]string, depth int) []*treeItem {
+func buildTreeItems(node *region.TreeNode, descs map[string]string, depth int) []*treeItem {
 	var items []*treeItem
 	for _, child := range node.Children {
 		item := &treeItem{
-			name:      child.Name,
-			fullPath:  child.FullPath,
-			file:      child.File,
-			startLine: child.Start,
-			endLine:   child.End,
-			depth:     depth,
-			comment:   comments[child.FullPath],
-			children:  buildTreeItems(child, comments, depth+1),
+			name:        child.Name,
+			fullPath:    child.FullPath,
+			file:        child.File,
+			startLine:   child.Start,
+			endLine:     child.End,
+			depth:       depth,
+			description: descs[child.FullPath],
+			children:    buildTreeItems(child, descs, depth+1),
 		}
 		items = append(items, item)
 	}
@@ -371,8 +371,8 @@ func (m interactiveModel) renderRegionTree(b *strings.Builder, maxLines int) {
 		}
 
 		line := indent + prefix + item.name
-		if item.comment != "" {
-			line += "  " + dimStyle.Render("# "+item.comment)
+		if item.description != "" {
+			line += "  " + dimStyle.Render(item.description)
 		}
 		if item.file != "" {
 			line += "  " + dimStyle.Render(fmt.Sprintf("[%s:%d]", item.file, item.startLine))
@@ -454,8 +454,8 @@ func (m interactiveModel) renderDetail(b *strings.Builder, maxLines int) {
 	// Find in arch entries
 	for _, e := range m.archEntries {
 		if e.Path == m.detailPath && lines < maxLines {
-			if e.Comment != "" {
-				b.WriteString("  Comment: " + e.Comment + "\n")
+			if e.Description != "" {
+				b.WriteString("  Description: " + e.Description + "\n")
 				lines++
 			}
 			b.WriteString(fmt.Sprintf("  arch.md line: %d\n", e.Line))

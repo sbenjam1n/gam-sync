@@ -58,7 +58,7 @@ The only hard rule: every @region in source must have a matching line in arch.md
 #### New Region Workflow
 
 To add a new region:
-1. Add the namespace line to arch.md (e.g., `app.search.cache    # Search result caching`)
+1. Add `@region`/`@endregion` markers to arch.md (e.g., `# @region:app.search.cache Search result caching` / `# @endregion:app.search.cache`)
 2. Add @region/@endregion markers in your source file(s)
 3. `gam turn end` validates that both sides match
 

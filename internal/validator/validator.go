@@ -388,7 +388,7 @@ func (v *Validator) validateSyncRefs(ctx context.Context, sync gam.Synchronizati
 func (v *Validator) ValidateArchAlignment(ctx context.Context, projectRoot string) []string {
 	var issues []string
 
-	// Check 1: arch.md namespace hierarchy consistency (dotwalk validation)
+	// Check 1: arch.md namespace hierarchy consistency
 	nsIssues := region.ValidateArchNamespaces(projectRoot)
 	issues = append(issues, nsIssues...)
 

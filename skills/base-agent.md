@@ -4,14 +4,11 @@ GAM+Sync is a framework for agentic software development with concepts (independ
 
 # Orientation
 
-Read arch.md first. It is the namespace skeleton — a dotwalk listing of every region path with comments. This is your map.
+Read arch.md first. It is the namespace skeleton — ~80 lines of `@region`/`@endregion` markers with dotwalked namespace paths and one-line descriptions. This is your map.
 
 ```
-app                          # Root application namespace
-app.search                   # Search subsystem
-app.search.sources           # Source management
-app.search.sources.btv2      # BT v2 adapter
-app.auth                     # Authentication
+# @region:app.search.sources Search Source Implementations
+# @endregion:app.search.sources
 ```
 
 For depth on a specific concept, sync, or plan, read the corresponding file in docs/:
@@ -77,15 +74,18 @@ Changes can touch multiple regions — validation checks them all.
 
 # arch.md
 
-arch.md uses namespace dotwalk format — one path per line with an optional comment:
+arch.md is `@region`/`@endregion` markers forming a namespace tree with one-line descriptions.
+Nothing else. No prose, no specs, no scratchpads, no JSON. The namespace path is a dotwalked
+identifier (e.g., `app.search.sources.btv2`).
 
 ```
-app                          # Root application namespace
-app.search                   # Search subsystem
-app.search.sources           # Source management
+# @region:app.search Search Subsystem
+# @region:app.search.sources Source Management
+# @endregion:app.search.sources
+# @endregion:app.search
 ```
 
-Every child namespace must have its parent defined (e.g., app.search requires app).
+Every child namespace must have its parent defined (e.g., `app.search.sources` requires `app.search`).
 Validation checks this hierarchy and reports violations.
 
 # Concepts

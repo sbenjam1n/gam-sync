@@ -377,17 +377,19 @@ func isIgnored(relPath string, patterns []string) bool {
 	return false
 }
 
-// ArchEntry represents a namespace entry in arch.md with its comment.
+// ArchEntry represents a namespace entry in arch.md with its description.
 type ArchEntry struct {
-	Path    string
-	Comment string
-	Line    int
+	Path        string
+	Description string
+	Line        int
 }
 
 // ParseArchMd extracts region paths from an arch.md file.
-// Supports two formats:
-//  1. Dotwalk format: "app.search.sources  # Source management" (preferred)
-//  2. Region marker format: "# @region:app.search.sources" (legacy)
+// arch.md uses @region/@endregion markers with dotwalked namespace paths
+// and optional one-line descriptions:
+//
+//	# @region:app.search.sources Search Source Implementations
+//	# @endregion:app.search.sources
 func ParseArchMd(projectRoot string) ([]string, error) {
 	entries, err := ParseArchMdEntries(projectRoot)
 	if err != nil {
@@ -400,7 +402,10 @@ func ParseArchMd(projectRoot string) ([]string, error) {
 	return paths, nil
 }
 
-// ParseArchMdEntries extracts namespace entries with comments from arch.md.
+// ParseArchMdEntries extracts namespace entries with descriptions from arch.md.
+// arch.md is @region/@endregion markers forming a namespace tree with
+// one-line descriptions. The namespace path is a dotwalked identifier
+// (e.g., app.search.sources.btv2).
 func ParseArchMdEntries(projectRoot string) ([]ArchEntry, error) {
 	archPath := filepath.Join(projectRoot, "arch.md")
 	data, err := os.ReadFile(archPath)
@@ -420,39 +425,38 @@ func ParseArchMdEntries(projectRoot string) ([]ArchEntry, error) {
 			continue
 		}
 
-		// Skip markdown headings
-		if strings.HasPrefix(trimmed, "#") {
-			// But check for legacy @region format inside comments
-			if path, ok := extractRegionPath(trimmed, "region"); ok {
-				if !seen[path] {
-					seen[path] = true
-					entries = append(entries, ArchEntry{Path: path, Line: lineNum + 1})
-				}
-			}
-			continue
-		}
-
-		// Dotwalk format: "app.search.sources  # comment"
-		// Valid namespace: starts with letter, contains only [a-zA-Z0-9_.]
-		parts := strings.SplitN(trimmed, "#", 2)
-		namespacePart := strings.TrimSpace(parts[0])
-		comment := ""
-		if len(parts) > 1 {
-			comment = strings.TrimSpace(parts[1])
-		}
-
-		if isValidNamespace(namespacePart) {
-			if !seen[namespacePart] {
-				seen[namespacePart] = true
+		// Extract @region paths (skip @endregion — same paths, no new info)
+		if path, ok := extractRegionPath(trimmed, "region"); ok {
+			if !seen[path] {
+				seen[path] = true
+				// Extract description: everything after the path on the same line
+				desc := extractArchDescription(trimmed, path)
 				entries = append(entries, ArchEntry{
-					Path:    namespacePart,
-					Comment: comment,
-					Line:    lineNum + 1,
+					Path:        path,
+					Description: desc,
+					Line:        lineNum + 1,
 				})
 			}
 		}
 	}
 	return entries, nil
+}
+
+// extractArchDescription extracts the one-line description after the region path.
+// e.g., "# @region:app.search.sources Search Source Implementations" → "Search Source Implementations"
+func extractArchDescription(line, path string) string {
+	marker := "@region:" + path
+	idx := strings.Index(line, marker)
+	if idx == -1 {
+		return ""
+	}
+	rest := line[idx+len(marker):]
+	// Trim comment closers and whitespace
+	rest = strings.TrimRight(rest, " \t")
+	rest = strings.TrimSuffix(rest, "-->")
+	rest = strings.TrimSuffix(rest, "*/")
+	rest = strings.TrimSpace(rest)
+	return rest
 }
 
 // isValidNamespace checks if a string is a valid dot-separated namespace path.

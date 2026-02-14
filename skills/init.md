@@ -19,7 +19,7 @@ gam init              # Full: + PostgreSQL schema + Redis streams
 ```
 
 Minimal init creates:
-- `arch.md` — Namespace dotwalk skeleton
+- `arch.md` — Namespace skeleton (`@region`/`@endregion` markers)
 - `.gamignore` — Patterns for files that skip region enforcement
 - `docs/` — Structured documentation directory
 
@@ -29,21 +29,33 @@ Full init additionally:
 
 ### 2. Design the Namespace Hierarchy
 
-Edit arch.md to define your project's namespace tree. Use dotwalk format — one namespace per line with an optional comment:
+Edit arch.md to define your project's namespace tree. Use `@region`/`@endregion` markers with dotwalked namespace paths and one-line descriptions:
 
 ```
-app                              # Root namespace
-app.auth                         # Authentication
-app.auth.session                 # Session management
-app.auth.tokens                  # JWT / refresh tokens
-app.billing                      # Billing
-app.billing.plans                # Subscription plans
-app.billing.invoices             # Invoice generation
-app.search                       # Search
-app.search.sources               # Source adapters
-app.search.sources.elastic       # Elasticsearch adapter
-app.search.sources.postgres      # PostgreSQL full-text search
-app.search.ranking               # Result ranking
+# @region:app
+# @region:app.auth Authentication
+# @region:app.auth.session Session management
+# @endregion:app.auth.session
+# @region:app.auth.tokens JWT / refresh tokens
+# @endregion:app.auth.tokens
+# @endregion:app.auth
+# @region:app.billing Billing
+# @region:app.billing.plans Subscription plans
+# @endregion:app.billing.plans
+# @region:app.billing.invoices Invoice generation
+# @endregion:app.billing.invoices
+# @endregion:app.billing
+# @region:app.search Search
+# @region:app.search.sources Source adapters
+# @region:app.search.sources.elastic Elasticsearch adapter
+# @endregion:app.search.sources.elastic
+# @region:app.search.sources.postgres PostgreSQL full-text search
+# @endregion:app.search.sources.postgres
+# @endregion:app.search.sources
+# @region:app.search.ranking Result ranking
+# @endregion:app.search.ranking
+# @endregion:app.search
+# @endregion:app
 ```
 
 Design principles:

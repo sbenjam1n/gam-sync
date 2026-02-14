@@ -263,7 +263,7 @@ func TestFileHasRegionMarkers(t *testing.T) {
 	}
 }
 
-func TestParseArchMdLegacy(t *testing.T) {
+func TestParseArchMd(t *testing.T) {
 	dir := t.TempDir()
 	content := `# Architecture
 # @region:app
@@ -285,16 +285,20 @@ func TestParseArchMdLegacy(t *testing.T) {
 	}
 }
 
-func TestParseArchMdDotwalk(t *testing.T) {
+func TestParseArchMdWithDescriptions(t *testing.T) {
 	dir := t.TempDir()
 	content := `# Architecture
-# Namespace dotwalk format
 
-app                          # Root application namespace
-app.search                   # Search subsystem
-app.search.sources           # Source management
-app.search.sources.btv2      # BT v2 adapter
-app.billing                  # Billing
+# @region:app
+# @region:app.search Search Subsystem
+# @endregion:app.search
+# @region:app.search.sources Source Management
+# @endregion:app.search.sources
+# @region:app.search.sources.btv2 BT v2 Adapter
+# @endregion:app.search.sources.btv2
+# @region:app.billing Billing
+# @endregion:app.billing
+# @endregion:app
 `
 	os.WriteFile(filepath.Join(dir, "arch.md"), []byte(content), 0644)
 
@@ -310,12 +314,12 @@ app.billing                  # Billing
 	entries, _ := ParseArchMdEntries(dir)
 	found := false
 	for _, e := range entries {
-		if e.Path == "app.search" && e.Comment == "Search subsystem" {
+		if e.Path == "app.search" && e.Description == "Search Subsystem" {
 			found = true
 		}
 	}
 	if !found {
-		t.Error("expected to find app.search with comment 'Search subsystem'")
+		t.Error("expected to find app.search with description 'Search Subsystem'")
 	}
 }
 
@@ -349,10 +353,14 @@ func TestValidateArchNamespaces(t *testing.T) {
 
 	// Valid hierarchy
 	content := `# Architecture
-app
-app.search
-app.search.sources
-app.billing
+# @region:app
+# @region:app.search
+# @endregion:app.search
+# @region:app.search.sources
+# @endregion:app.search.sources
+# @region:app.billing
+# @endregion:app.billing
+# @endregion:app
 `
 	os.WriteFile(filepath.Join(dir, "arch.md"), []byte(content), 0644)
 
@@ -361,10 +369,12 @@ app.billing
 		t.Errorf("expected no issues, got: %v", issues)
 	}
 
-	// Missing parent
+	// Missing parent — app.search.sources without app.search
 	content2 := `# Architecture
-app
-app.search.sources
+# @region:app
+# @region:app.search.sources
+# @endregion:app.search.sources
+# @endregion:app
 `
 	os.WriteFile(filepath.Join(dir, "arch.md"), []byte(content2), 0644)
 
