@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -14,6 +15,20 @@ import (
 var turnCmd = &cobra.Command{
 	Use:   "turn",
 	Short: "Turn lifecycle management",
+}
+
+// captureTreeSnapshot scans source for region markers and returns a JSON-encoded
+// map of region path -> list of "file:startLine-endLine" locations.
+func captureTreeSnapshot(root string) ([]byte, map[string][]string) {
+	gamignore := region.ParseGamignore(root)
+	markers, _, _ := region.ScanDirectory(root, gamignore)
+	snapshot := make(map[string][]string)
+	for _, mk := range markers {
+		snapshot[mk.Path] = append(snapshot[mk.Path],
+			fmt.Sprintf("%s:%d-%d", mk.File, mk.StartLine, mk.EndLine))
+	}
+	data, _ := json.Marshal(snapshot)
+	return data, snapshot
 }
 
 var turnStartCmd = &cobra.Command{
@@ -35,11 +50,15 @@ var turnStartCmd = &cobra.Command{
 
 		turnID := memorizer.GenerateTurnID()
 
-		// Insert the turn
+		// Capture tree_before snapshot
+		root := projectRoot()
+		treeBefore, _ := captureTreeSnapshot(root)
+
+		// Insert the turn with tree_before
 		_, err = pool.Exec(ctx, `
-			INSERT INTO turns (id, agent_role, scope_path, status, task_type)
-			VALUES ($1, 'researcher', $2, 'ACTIVE', 'implement')
-		`, turnID, regionPath)
+			INSERT INTO turns (id, agent_role, scope_path, status, task_type, tree_before)
+			VALUES ($1, 'researcher', $2, 'ACTIVE', 'implement', $3)
+		`, turnID, regionPath, treeBefore)
 		if err != nil {
 			return fmt.Errorf("create turn: %w", err)
 		}
@@ -173,7 +192,7 @@ var turnStartCmd = &cobra.Command{
 
 var turnEndCmd = &cobra.Command{
 	Use:   "end",
-	Short: "End a turn: validate (blocks on failure), save memory, queue proposals",
+	Short: "End a turn: validate (blocks on failure), save memory, record structural diff",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		scratchpad, _ := cmd.Flags().GetString("scratchpad")
 		if scratchpad == "" {
@@ -197,14 +216,21 @@ var turnEndCmd = &cobra.Command{
 			return fmt.Errorf("no active turn found: %w", err)
 		}
 
+		// Scan source regions once (used for validation, tree snapshot, and turn_regions)
+		root := projectRoot()
+		treeAfterJSON, afterSnapshot := captureTreeSnapshot(root)
+
+		gamignore := region.ParseGamignore(root)
+		_, warnings, _ := region.ScanDirectory(root, gamignore)
+
 		// --- Validation gate: blocks turn end on failure ---
 		if !skipValidation {
 			fmt.Printf("Validating turn %s (scope: %s)...\n", turnID, scopePath)
 
-			v := validator.New(pool, projectRoot())
+			v := validator.New(pool, root)
 
 			// Check 1: arch.md namespace alignment
-			archIssues := v.ValidateArchAlignment(ctx, projectRoot())
+			archIssues := v.ValidateArchAlignment(ctx, root)
 			if len(archIssues) > 0 {
 				fmt.Println("\nVALIDATION FAILED: arch.md alignment issues")
 				for _, issue := range archIssues {
@@ -215,10 +241,7 @@ var turnEndCmd = &cobra.Command{
 				return fmt.Errorf("validation failed: %d arch.md alignment issues", len(archIssues))
 			}
 
-			// Check 2: Region markers in source code
-			gamignore := region.ParseGamignore(projectRoot())
-			markers, warnings, _ := region.ScanDirectory(projectRoot(), gamignore)
-
+			// Check 2: Region marker integrity
 			if len(warnings) > 0 {
 				fmt.Println("\nVALIDATION FAILED: region marker issues")
 				for _, w := range warnings {
@@ -229,16 +252,16 @@ var turnEndCmd = &cobra.Command{
 			}
 
 			// Check 3: Source regions match arch.md
-			archPaths, _ := region.ParseArchMd(projectRoot())
+			archPaths, _ := region.ParseArchMd(root)
 			archSet := make(map[string]bool)
 			for _, p := range archPaths {
 				archSet[p] = true
 			}
 
 			var unregistered []string
-			for _, m := range markers {
-				if !archSet[m.Path] {
-					unregistered = append(unregistered, m.Path)
+			for path := range afterSnapshot {
+				if !archSet[path] {
+					unregistered = append(unregistered, path)
 				}
 			}
 
@@ -254,12 +277,52 @@ var turnEndCmd = &cobra.Command{
 			fmt.Println("  Validation passed.")
 		}
 
+		// Record turn_regions by diffing tree_before vs tree_after
+		var treeBeforeJSON []byte
+		pool.QueryRow(ctx, "SELECT tree_before FROM turns WHERE id = $1", turnID).Scan(&treeBeforeJSON)
+		var beforeSnapshot map[string][]string
+		if treeBeforeJSON != nil {
+			json.Unmarshal(treeBeforeJSON, &beforeSnapshot)
+		}
+
+		for path := range afterSnapshot {
+			action := "modified"
+			if beforeSnapshot == nil || beforeSnapshot[path] == nil {
+				action = "created"
+			}
+			var regionID string
+			pool.QueryRow(ctx, "SELECT id FROM regions WHERE path = $1", path).Scan(&regionID)
+			if regionID != "" {
+				pool.Exec(ctx, `
+					INSERT INTO turn_regions (turn_id, region_id, action)
+					VALUES ($1, $2, $3)
+					ON CONFLICT (turn_id, region_id) DO UPDATE SET action = $3
+				`, turnID, regionID, action)
+			}
+		}
+		if beforeSnapshot != nil {
+			for path := range beforeSnapshot {
+				if afterSnapshot[path] == nil {
+					var regionID string
+					pool.QueryRow(ctx, "SELECT id FROM regions WHERE path = $1", path).Scan(&regionID)
+					if regionID != "" {
+						pool.Exec(ctx, `
+							INSERT INTO turn_regions (turn_id, region_id, action)
+							VALUES ($1, $2, 'deleted')
+							ON CONFLICT (turn_id, region_id) DO UPDATE SET action = 'deleted'
+						`, turnID, regionID)
+					}
+				}
+			}
+		}
+
+		// Complete the turn with scratchpad and tree_after
 		now := time.Now()
 		_, err = pool.Exec(ctx, `
 			UPDATE turns
-			SET scratchpad = $1, status = 'COMPLETED', completed_at = $2
-			WHERE id = $3
-		`, scratchpad, now, turnID)
+			SET scratchpad = $1, status = 'COMPLETED', completed_at = $2, tree_after = $3
+			WHERE id = $4
+		`, scratchpad, now, treeAfterJSON, turnID)
 		if err != nil {
 			return fmt.Errorf("end turn: %w", err)
 		}
